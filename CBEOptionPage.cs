@@ -82,12 +82,10 @@ namespace CodeBlockEndTag
         /// </summary>
         public bool IsLanguageSupported(string lang)
         {
-            var index = Array.FindIndex(_supportedLangs, x => x.Name.Equals(lang));
-            if (index >= 0 && index < SupportedLangActive.Length)
-            {
-                return SupportedLangActive[index];
-            }
-            return false;
+            return _supportedLangs
+                .Zip(SupportedLangActive, (supported, isActive) => new { supported, isActive })
+                .Where(x => x.isActive)
+                .Any(x => x.supported.Name.Equals(lang, StringComparison.OrdinalIgnoreCase));
         }
 
         #endregion

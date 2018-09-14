@@ -21,7 +21,7 @@ namespace CodeBlockEndTag
     /// </summary>
     internal class CBETagger : ITagger<IntraTextAdornmentTag>, IDisposable
     {
-        private static readonly ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>> EmptyTagColllection =
+        private static readonly ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>> EmptyTagCollection =
             new ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>>(new List<ITagSpan<IntraTextAdornmentTag>>());
 
         #region Properties & Fields
@@ -99,7 +99,7 @@ namespace CodeBlockEndTag
             CBETagPackage.Instance.PackageOptionChanged += OnPackageOptionChanged;
             if (_VSFontsInformation != null)
             {
-                ReloadFontSize();
+                ReloadFontSize(_VSFontsInformation);
                 _VSFontsInformation.Updated += _VSFontsInformation_Updated;
             }
         }
@@ -108,7 +108,7 @@ namespace CodeBlockEndTag
 
         #region VsFontAndColorInformation
 
-        private IVsFontsAndColorsInformation TryGetFontAndColorInfo(IVsFontsAndColorsInformationService service)
+        private static IVsFontsAndColorsInformation TryGetFontAndColorInfo(IVsFontsAndColorsInformationService service)
         {
             var guidTextFileType = new Guid(2184822468u, 61063, 4560, 140, 152, 0, 192, 79, 194, 171, 34);
             var fonts = new FontsAndColorsCategory(
@@ -118,19 +118,19 @@ namespace CodeBlockEndTag
             return service?.GetFontAndColorInformation(fonts);
         }
 
-        private void ReloadFontSize()
+        private void ReloadFontSize(IVsFontsAndColorsInformation _VSFontsInformation)
         {
-            if (_VSFontsInformation!=null)
-            {
-                var pref = _VSFontsInformation.GetFontAndColorPreferences();
-                var font = System.Drawing.Font.FromHfont(pref.hRegularViewFont);
-                _FontSize = font?.Size ?? _FontSize;
-            }
+            var pref = _VSFontsInformation.GetFontAndColorPreferences();
+            var font = System.Drawing.Font.FromHfont(pref.hRegularViewFont);
+            _FontSize = font?.Size ?? _FontSize;
         }
 
         private void _VSFontsInformation_Updated(object sender, EventArgs e)
         {
-            ReloadFontSize();
+            if (_VSFontsInformation != null)
+            {
+                ReloadFontSize(_VSFontsInformation);
+            }
         }
 
         #endregion
@@ -143,7 +143,7 @@ namespace CodeBlockEndTag
             var end = Math.Max(e.OldPosition.BufferPosition.Position, e.NewPosition.BufferPosition.Position);
             if (start != end)
             {
-                InvalidateSpan(new Span(start, end - start), false);
+                InvalidateSpan(new Span(start, end - start));
             }
         }
 
@@ -209,11 +209,11 @@ namespace CodeBlockEndTag
 
         internal ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>> GetTags(SnapshotSpan span)
         {
-            if (!CBETagPackage.CBETaggerEnabled ||
-                span.Snapshot != _TextView.TextBuffer.CurrentSnapshot ||
-                span.Length == 0)
+            if (!CBETagPackage.CBETaggerEnabled 
+                || span.Snapshot != _TextView.TextBuffer.CurrentSnapshot 
+                || span.Length == 0)
             {
-                return EmptyTagColllection;
+                return EmptyTagCollection;
             }
 
             // if big span, return only tags for visible area
@@ -224,16 +224,35 @@ namespace CodeBlockEndTag
                 {
                     span = overlap.Value;
                     if (span.Length == 0)
-                        return EmptyTagColllection;
+                        return EmptyTagCollection;
                 }
             }
+#if DEBUG
+            return Measure(() => GetTagsCore(span), (time) =>
+            {
+                return "Time elapsed: " + time +
+                    " on Thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId +
+                    " in Span: " + span.Start.Position + ":" + span.End.Position + " length: " + span.Length;
+            });
 
+#else
             return GetTagsCore(span);
+#endif
         }
 
-#if DEBUG
-        System.Diagnostics.Stopwatch watch;
-#endif
+        private static T Measure<T>(Func<T> func, Func<TimeSpan, string> output)
+        {
+            var watch = new System.Diagnostics.Stopwatch();
+            watch.Start();
+            var result = func.Invoke();
+            watch.Stop();
+            if (watch.Elapsed.Milliseconds > 100)
+            {
+                System.Diagnostics.Debug.WriteLine(output.Invoke(watch.Elapsed));
+            }
+            return result;
+        }
+
         private ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>> GetTagsCore(SnapshotSpan span)
         {
             var list = new List<ITagSpan<IntraTextAdornmentTag>>();
@@ -241,37 +260,17 @@ namespace CodeBlockEndTag
             var snapshot = span.Snapshot;
 
             // vars used in loop
-            SnapshotSpan cbSpan;
-            CBAdornmentData cbAdornmentData;
-            CBETagControl tagElement;
-            int cbStartPosition;
-            int cbEndPosition;
-            int cbHeaderPosition;
-            string cbHeader;
-            IntraTextAdornmentTag cbTag;
-            SnapshotSpan cbSnapshotSpan;
-            TagSpan<IntraTextAdornmentTag> cbTagSpan;
+            
             var isSingleLineComment = false;
             var isMultiLineComment = false;
-
-#if DEBUG
-            // Stop time
-            if (watch == null)
-            {
-                watch = new System.Diagnostics.Stopwatch();
-            }
-            watch.Restart();
-#endif
-
 
             // Find all closing bracets
             for (int i = 0; i < span.Length; i++)
             {
                 var position = i + offset;
-                var chr = snapshot[position];
 
                 // Skip comments
-                switch (chr)
+                switch (snapshot[position])
                 {
                     case '/':
                         if (position > 0)
@@ -298,24 +297,25 @@ namespace CodeBlockEndTag
                         if (position > 0 && snapshot[position - 1] == '/')
                             isMultiLineComment = true;
                         break;
-                    case (char)10:
-                        isSingleLineComment = false;
-                        break;
-                    case (char)13:
+                    case '\n':
+                    case '\r':
                         isSingleLineComment = false;
                         break;
                 }
 
-                if (chr != '}' || isSingleLineComment || isMultiLineComment)
+                if (snapshot[position] != '}' || isSingleLineComment || isMultiLineComment)
                     continue;
 
+
+                SnapshotSpan cbSpan;
+                int cbStartPosition;
                 // getting start and end position of code block
-                cbEndPosition = position;
+                var cbEndPosition = position;
                 if (position >= 0 && snapshot[position - 1] == '{')
                 {
                     // empty code block {} 
                     cbStartPosition = position - 1;
-                    cbSpan = new SnapshotSpan(snapshot, cbStartPosition, cbEndPosition - cbStartPosition);
+                    cbSpan = new SnapshotSpan(snapshot, position - 1, 1);
                 }
                 else
                 {
@@ -329,7 +329,9 @@ namespace CodeBlockEndTag
                     continue;
 
                 // getting the code blocks header 
-                cbHeaderPosition = -1;
+                var cbHeaderPosition = -1;
+                string cbHeader;
+
                 if (snapshot[cbStartPosition] == '{')
                 {
                     // cbSpan does not contain the header
@@ -366,12 +368,12 @@ namespace CodeBlockEndTag
                 }
 
                 // use cache or create new tag
-                cbAdornmentData = _adornmentCache
-                                    .Where(x =>
-                                        x.StartPosition == cbStartPosition &&
-                                        x.EndPosition == cbEndPosition)
-                                    .FirstOrDefault();
+                var cbAdornmentData = _adornmentCache
+                    .Find(x =>
+                    x.StartPosition == cbStartPosition
+                    && x.EndPosition == cbEndPosition);
 
+                CBETagControl tagElement;
                 if (cbAdornmentData?.Adornment != null)
                 {
                     tagElement = cbAdornmentData.Adornment as CBETagControl;
@@ -394,23 +396,13 @@ namespace CodeBlockEndTag
                 }
 
                 tagElement.LineHeight = _FontSize * CBETagPackage.CBETagScale;
-                
+
                 // Add new tag to list
-                cbTag = new IntraTextAdornmentTag(tagElement, null);
-                cbSnapshotSpan = new SnapshotSpan(snapshot, position + 1, 0);
-                cbTagSpan = new TagSpan<IntraTextAdornmentTag>(cbSnapshotSpan, cbTag);          
+                var cbTag = new IntraTextAdornmentTag(tagElement, null);
+                var cbSnapshotSpan = new SnapshotSpan(snapshot, position + 1, 0);
+                var cbTagSpan = new TagSpan<IntraTextAdornmentTag>(cbSnapshotSpan, cbTag);
                 list.Add(cbTagSpan);
             }
-
-#if DEBUG
-            watch.Stop();
-            if (watch.Elapsed.Milliseconds > 100)
-            {
-                System.Diagnostics.Debug.WriteLine("Time elapsed: " + watch.Elapsed +
-                    " on Thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId +
-                    " in Span: " + span.Start.Position + ":" + span.End.Position + " length: " + span.Length);
-            }
-#endif
 
             return new ReadOnlyCollection<ITagSpan<IntraTextAdornmentTag>>(list);
         }
@@ -442,10 +434,6 @@ namespace CodeBlockEndTag
             // check all enclosing spans until the header is complete
             do
             {
-                // abort if in endless loop
-                if (loops++ > 10)
-                    break;
-
                 // get text of current span
                 headerStart = currentSpan.Start;
                 headerSpan = new Span(headerStart, Math.Min(maxEndPosition, currentSpan.Span.End) - headerStart);
@@ -497,9 +485,8 @@ namespace CodeBlockEndTag
                     }
                     return headerText;
                 }
-
-                // get next enclosing span of current span
-            } while ((currentSpan = _TextStructureNavigator.GetSpanOfEnclosing(currentSpan)) != null);
+                currentSpan = _TextStructureNavigator.GetSpanOfEnclosing(currentSpan);
+            } while (loops++ > 10); // TODO: create better algorithm than looping 10 times
 
             // No header found
             headerStart = -1;
@@ -507,9 +494,9 @@ namespace CodeBlockEndTag
         }
 
 
-        #endregion
+#endregion
 
-        #region Tag Clicked Handler
+#region Tag Clicked Handler
 
         /// <summary>
         /// Handles the click event on a tag
@@ -536,9 +523,9 @@ namespace CodeBlockEndTag
             _TextView.Caret.MoveTo(targetPoint);
         }
 
-        #endregion
+#endregion
 
-        #region Options changed
+#region Options changed
 
         /// <summary>
         /// Handles the event when any package option is changed
@@ -547,22 +534,24 @@ namespace CodeBlockEndTag
         {
             var start = Math.Max(0, _VisibleSpan.HasValue ? _VisibleSpan.Value.Start : 0);
             var end = Math.Max(1, _VisibleSpan.HasValue ? _VisibleSpan.Value.End : 1);
-            InvalidateSpan(new Span(start, end - start));
+
+            var span = new Span(start, end - start);
+            ClearCache(span);
+            InvalidateSpan(span);
+        }
+
+        private void ClearCache(Span invalidateSpan)
+        {
+            _adornmentCache
+                    .Where(a => a.HeaderStartPosition >= invalidateSpan.Start || a.EndPosition >= invalidateSpan.Start)
+                    .ToList().ForEach(a => RemoveFromCache(a));
         }
 
         /// <summary>
         /// Invalidates all cached tags within or after the given span
         /// </summary>
-        private void InvalidateSpan(Span invalidateSpan, bool clearCache = true)
+        private void InvalidateSpan(Span invalidateSpan)
         {
-            // Remove tags from cache
-            if (clearCache)
-            {
-                _adornmentCache
-                    .Where(a => a.HeaderStartPosition >= invalidateSpan.Start || a.EndPosition >= invalidateSpan.Start)
-                    .ToList().ForEach(a => RemoveFromCache(a));
-            }
-
             // Invalidate span
             if (invalidateSpan.End <= _TextView.TextBuffer.CurrentSnapshot.Length)
             {
@@ -571,13 +560,10 @@ namespace CodeBlockEndTag
             }
         }
 
-        #endregion
+#endregion
 
-        #region IDisposable
+#region IDisposable
 
-        /// <summary>
-        /// Clean up all events and references
-        /// </summary>
         private void Dispose(bool disposing)
         {
             if (_Disposed)
@@ -585,6 +571,7 @@ namespace CodeBlockEndTag
 
             if (disposing)
             {
+                // Clean up all events and references
                 CBETagPackage.Instance.PackageOptionChanged -= OnPackageOptionChanged;
                 _TextView.LayoutChanged -= OnTextViewLayoutChanged;
                 _TextView.TextBuffer.Changed -= TextBuffer_Changed;
@@ -598,9 +585,9 @@ namespace CodeBlockEndTag
             GC.SuppressFinalize(this);
         }
 
-        #endregion
+#endregion
 
-        #region visibility of tags
+#region visibility of tags
 
         /// <summary>
         /// Checks if a tag's header is visible
@@ -616,7 +603,9 @@ namespace CodeBlockEndTag
             // Check general condition
             if (CBETagPackage.CBEVisibilityMode == (int)CBEOptionPage.VisibilityModes.Always
                 || !visibleSpan.HasValue)
+            {
                 isVisible = true;
+            }
             // Check visible span
             if (!isVisible)
             {
@@ -658,23 +647,21 @@ namespace CodeBlockEndTag
             }
             return null;
         }
+#endregion
 
-
-        #endregion
-
-        #region TextView scrolling
+#region TextView scrolling
 
         private void OnTextViewLayoutChanged(object sender, TextViewLayoutChangedEventArgs e)
         {
             // get new visible span
             var visibleSpan = GetVisibleSpan(_TextView);
-            if (visibleSpan == null || !visibleSpan.HasValue)
+            if (!visibleSpan.HasValue)
                 return;
 
             // only if new visible span is different from old
-            if (!_VisibleSpan.HasValue ||
-                _VisibleSpan.Value.Start != visibleSpan.Value.Start ||
-                _VisibleSpan.Value.End < visibleSpan.Value.End)
+            if (!_VisibleSpan.HasValue
+                || _VisibleSpan.Value.Start != visibleSpan.Value.Start
+                || _VisibleSpan.Value.End < visibleSpan.Value.End)
             {
                 // invalidate new and/or old visible span
                 var invalidSpans = new List<Span>();
@@ -706,13 +693,11 @@ namespace CodeBlockEndTag
                 {
                     if (CBETagPackage.CBEVisibilityMode != (int)CBEOptionPage.VisibilityModes.Always)
                     {
-                        InvalidateSpan(span, false);
+                        InvalidateSpan(span);
                     }
                 }
             }
         }
-
-        #endregion
-
+#endregion
     }
 }
