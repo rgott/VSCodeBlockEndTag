@@ -110,32 +110,24 @@ namespace CodeBlockEndTag
 
         private IVsFontsAndColorsInformation TryGetFontAndColorInfo(IVsFontsAndColorsInformationService service)
         {
-            try
-            {
-                var guidTextFileType = new Guid(2184822468u, 61063, 4560, 140, 152, 0, 192, 79, 194, 171, 34);
-                var fonts = new FontsAndColorsCategory(
-                    guidTextFileType,
-                    DefGuidList.guidTextEditorFontCategory,
-                    DefGuidList.guidTextEditorFontCategory);
-                return service.GetFontAndColorInformation(fonts);
-            }
-            catch { }
-            return null;
+            var guidTextFileType = new Guid(2184822468u, 61063, 4560, 140, 152, 0, 192, 79, 194, 171, 34);
+            var fonts = new FontsAndColorsCategory(
+                guidTextFileType,
+                DefGuidList.guidTextEditorFontCategory,
+                DefGuidList.guidTextEditorFontCategory);
+            return service?.GetFontAndColorInformation(fonts);
         }
 
         private void ReloadFontSize()
         {
             if (_VSFontsInformation!=null)
             {
-                try
-                {
-                    var pref = _VSFontsInformation.GetFontAndColorPreferences();
-                    var font = System.Drawing.Font.FromHfont(pref.hRegularViewFont);
-                    _FontSize = font.Size;
-                }
-                catch { }
+                var pref = _VSFontsInformation.GetFontAndColorPreferences();
+                var font = System.Drawing.Font.FromHfont(pref.hRegularViewFont);
+                _FontSize = font?.Size ?? _FontSize;
             }
         }
+
         private void _VSFontsInformation_Updated(object sender, EventArgs e)
         {
             ReloadFontSize();
@@ -166,11 +158,13 @@ namespace CodeBlockEndTag
         void OnTextChanged(ITextChange textChange)
         {
             // remove or update tags in adornment cache
-            List<CBAdornmentData> remove = new List<CBAdornmentData>();
+            var remove = new List<CBAdornmentData>();
             foreach (var adornment in _adornmentCache)
             {
                 if (!(adornment.HeaderStartPosition > textChange.OldEnd || adornment.EndPosition < textChange.OldPosition))
+                {
                     remove.Add(adornment);
+                }
                 else if (adornment.HeaderStartPosition > textChange.OldEnd)
                 {
                     adornment.HeaderStartPosition += textChange.Delta;
@@ -187,8 +181,7 @@ namespace CodeBlockEndTag
 
         private void RemoveFromCache(CBAdornmentData adornment)
         {
-            var tag = adornment.Adornment as CBETagControl;
-            if (tag != null)
+            if (adornment.Adornment is CBETagControl tag)
             {
                 tag.TagClicked -= Adornment_TagClicked;
             }
@@ -201,14 +194,7 @@ namespace CodeBlockEndTag
 
         IEnumerable<ITagSpan<IntraTextAdornmentTag>> ITagger<IntraTextAdornmentTag>.GetTags(NormalizedSnapshotSpanCollection spans)
         {
-            foreach (var span in spans)
-            {
-                var tags = GetTags(span);
-                foreach (var tag in tags)
-                {
-                    yield return tag;
-                }
-            }
+            return spans.SelectMany(GetTags);
         }
 
         event EventHandler<SnapshotSpanEventArgs> ITagger<IntraTextAdornmentTag>.TagsChanged
@@ -231,10 +217,10 @@ namespace CodeBlockEndTag
             }
 
             // if big span, return only tags for visible area
-            if (span.Length > 1000 && _VisibleSpan != null && _VisibleSpan.HasValue)
+            if (span.Length > 1000 && _VisibleSpan.HasValue)
             {
                 var overlap = span.Overlap(_VisibleSpan.Value);
-                if (overlap != null && overlap.HasValue)
+                if (overlap.HasValue)
                 {
                     span = overlap.Value;
                     if (span.Length == 0)
@@ -265,13 +251,15 @@ namespace CodeBlockEndTag
             IntraTextAdornmentTag cbTag;
             SnapshotSpan cbSnapshotSpan;
             TagSpan<IntraTextAdornmentTag> cbTagSpan;
-            bool isSingleLineComment = false;
-            bool isMultiLineComment = false;
+            var isSingleLineComment = false;
+            var isMultiLineComment = false;
 
 #if DEBUG
             // Stop time
             if (watch == null)
+            {
                 watch = new System.Diagnostics.Stopwatch();
+            }
             watch.Restart();
 #endif
 
@@ -379,9 +367,9 @@ namespace CodeBlockEndTag
 
                 // use cache or create new tag
                 cbAdornmentData = _adornmentCache
-                                    .Where(o =>
-                                        o.StartPosition == cbStartPosition &&
-                                        o.EndPosition == cbEndPosition)
+                                    .Where(x =>
+                                        x.StartPosition == cbStartPosition &&
+                                        x.EndPosition == cbEndPosition)
                                     .FirstOrDefault();
 
                 if (cbAdornmentData?.Adornment != null)
@@ -450,7 +438,7 @@ namespace CodeBlockEndTag
 
             Span headerSpan, headerSpan2;
             string headerText, headerText2;
-            int loops = 0;
+            var loops = 0;
             // check all enclosing spans until the header is complete
             do
             {
@@ -485,9 +473,9 @@ namespace CodeBlockEndTag
                     {
                         // skip annotations
                         headerText = headerText.Replace('\r', '\n').Replace("\n\n", "\n");
-                        string[] headerLines = headerText.Split('\n');
-                        bool annotaions = true;
-                        int openBracets = 0;
+                        var headerLines = headerText.Split('\n');
+                        var annotaions = true;
+                        var openBracets = 0;
                         headerText = string.Empty;
                         foreach (var line in headerLines)
                         {
@@ -528,22 +516,24 @@ namespace CodeBlockEndTag
         /// </summary>
         private void Adornment_TagClicked(CBAdornmentData adornment, bool jumpToHead)
         {
-            if (_TextView != null)
+            if (_TextView == null)
             {
-                SnapshotPoint targetPoint = new SnapshotPoint();
-                if (jumpToHead)
-                {
-                    // Jump to header
-                    targetPoint = new SnapshotPoint(_TextView.TextBuffer.CurrentSnapshot, adornment.HeaderStartPosition);
-                    _TextView.DisplayTextLineContainingBufferPosition(targetPoint, 30, ViewRelativePosition.Top);
-                }
-                else
-                {
-                    // Set caret behind closing bracet
-                    targetPoint = new SnapshotPoint(_TextView.TextBuffer.CurrentSnapshot, adornment.EndPosition + 1);
-                }
-                _TextView.Caret.MoveTo(targetPoint);
+                return;
             }
+
+            SnapshotPoint targetPoint;
+            if (jumpToHead)
+            {
+                // Jump to header
+                targetPoint = new SnapshotPoint(_TextView.TextBuffer.CurrentSnapshot, adornment.HeaderStartPosition);
+                _TextView.DisplayTextLineContainingBufferPosition(targetPoint, 30, ViewRelativePosition.Top);
+            }
+            else
+            {
+                // Set caret behind closing bracet
+                targetPoint = new SnapshotPoint(_TextView.TextBuffer.CurrentSnapshot, adornment.EndPosition + 1);
+            }
+            _TextView.Caret.MoveTo(targetPoint);
         }
 
         #endregion
@@ -555,8 +545,8 @@ namespace CodeBlockEndTag
         /// </summary>
         private void OnPackageOptionChanged(object sender)
         {
-            int start = Math.Max(0, _VisibleSpan.HasValue ? _VisibleSpan.Value.Start : 0);
-            int end = Math.Max(1, _VisibleSpan.HasValue ? _VisibleSpan.Value.End : 1);
+            var start = Math.Max(0, _VisibleSpan.HasValue ? _VisibleSpan.Value.Start : 0);
+            var end = Math.Max(1, _VisibleSpan.HasValue ? _VisibleSpan.Value.End : 1);
             InvalidateSpan(new Span(start, end - start));
         }
 
@@ -622,10 +612,10 @@ namespace CodeBlockEndTag
         /// <returns>true if the tag is visible (or if all tags are shown)</returns>
         private bool IsTagVisible(int start, int end, Span? visibleSpan, ITextSnapshot snapshot)
         {
-            bool isVisible = false;
+            var isVisible = false;
             // Check general condition
             if (CBETagPackage.CBEVisibilityMode == (int)CBEOptionPage.VisibilityModes.Always
-                || visibleSpan == null || !visibleSpan.HasValue)
+                || !visibleSpan.HasValue)
                 isVisible = true;
             // Check visible span
             if (!isVisible)
@@ -641,13 +631,12 @@ namespace CodeBlockEndTag
                 var lineEnd = Math.Max(caretIndex, end);
                 if (lineStart == lineEnd)
                 {
-                    isVisible = false;
+                    return false;
                 }
                 else if (lineStart >= 0 && lineEnd <= snapshot.Length)
                 {
-                    string line = snapshot.GetText(lineStart, lineEnd - lineStart);
-                    if (!line.Contains('\n'))
-                        isVisible = false;
+                    var line = snapshot.GetText(lineStart, lineEnd - lineStart);
+                    return line.Contains('\n');
                 }
             }
             return isVisible;
@@ -688,7 +677,7 @@ namespace CodeBlockEndTag
                 _VisibleSpan.Value.End < visibleSpan.Value.End)
             {
                 // invalidate new and/or old visible span
-                List<Span> invalidSpans = new List<Span>();
+                var invalidSpans = new List<Span>();
                 var newSpan = visibleSpan.Value;
                 if (!_VisibleSpan.HasValue)
                 {
@@ -716,7 +705,9 @@ namespace CodeBlockEndTag
                 foreach (var span in invalidSpans)
                 {
                     if (CBETagPackage.CBEVisibilityMode != (int)CBEOptionPage.VisibilityModes.Always)
+                    {
                         InvalidateSpan(span, false);
+                    }
                 }
             }
         }

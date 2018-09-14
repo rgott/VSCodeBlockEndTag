@@ -24,7 +24,7 @@ namespace CodeBlockEndTag
             set { SetValue(TextProperty, value); }
         }
         public static readonly DependencyProperty TextProperty =
-            DependencyProperty.Register("Text", typeof(string), typeof(CBETagControl), new PropertyMetadata("Unkown"));
+            DependencyProperty.Register(nameof(Text), typeof(string), typeof(CBETagControl), new PropertyMetadata("Unkown"));
 
 
         public ImageMoniker IconMoniker
@@ -33,7 +33,7 @@ namespace CodeBlockEndTag
             set { SetValue(IconMonikerProperty, value); }
         }
         public static readonly DependencyProperty IconMonikerProperty =
-            DependencyProperty.Register("IconMoniker", typeof(ImageMoniker), typeof(CBETagControl), new PropertyMetadata(KnownMonikers.QuestionMark));
+            DependencyProperty.Register(nameof(IconMoniker), typeof(ImageMoniker), typeof(CBETagControl), new PropertyMetadata(KnownMonikers.QuestionMark));
 
 
         public int DisplayMode
@@ -42,7 +42,7 @@ namespace CodeBlockEndTag
             set { SetValue(DisplayModeProperty, value); }
         }
         public static readonly DependencyProperty DisplayModeProperty =
-            DependencyProperty.Register("DisplayMode", typeof(int), typeof(CBETagControl), new PropertyMetadata(0));
+            DependencyProperty.Register(nameof(DisplayMode), typeof(int), typeof(CBETagControl), new PropertyMetadata(0));
 
 
         public double LineHeight
@@ -51,7 +51,7 @@ namespace CodeBlockEndTag
             set { SetValue(LineHeightProperty, value); }
         }
         public static readonly DependencyProperty LineHeightProperty =
-            DependencyProperty.Register("LineHeight", typeof(double), typeof(CBETagControl), new PropertyMetadata(9d));
+            DependencyProperty.Register(nameof(LineHeight), typeof(double), typeof(CBETagControl), new PropertyMetadata(9d));
 
 
         internal CBAdornmentData AdornmentData { get; set; }
@@ -75,9 +75,8 @@ namespace CodeBlockEndTag
             }
             else
             {
-                TextBlock tb = btnTag.Template.FindName("txtTag", btnTag) as TextBlock;
-                Size size = new Size(8 + LineHeight + (tb?.ActualWidth ?? 0) + paddingRight, LineHeight);
-                return size;
+                var tb = btnTag.Template.FindName("txtTag", btnTag) as TextBlock;
+                return new Size(8 + LineHeight + (tb?.ActualWidth ?? 0) + paddingRight, LineHeight);
             }
         }
 
@@ -115,7 +114,7 @@ namespace CodeBlockEndTag
 
         private void ButtonClicked(int clickCount)
         {
-            int neededClickCount = 0;
+            var neededClickCount = 0;
             switch (CBETagPackage.CBEClickMode)
             {
                 case (int)CBEOptionPage.ClickMode.SingleClick:
@@ -127,25 +126,29 @@ namespace CodeBlockEndTag
                 case (int)CBEOptionPage.ClickMode.DoubleClick:
                     neededClickCount = 2;
                     break;
+                default:
+                    throw new NotImplementedException("Unexpected Case");
             }
 
             if (AdornmentData != null)
             {
-                bool jumpToHead = (clickCount >= neededClickCount) && buttonModifiersPressed;
+                var jumpToHead = (clickCount >= neededClickCount) && buttonModifiersPressed;
                 TagClicked?.Invoke(AdornmentData, jumpToHead);
             }
         }
 
         private bool CheckModifiers()
         {
-            Key modifier = Key.None;
-            Key altModifier = Key.None;
+            var modifier = Key.None;
+            var altModifier = Key.None;
             switch (CBETagPackage.CBEClickMode)
             {
                 case (int)CBEOptionPage.ClickMode.CtrlClick:
                     modifier = Key.LeftCtrl;
                     altModifier = Key.RightCtrl;
                     break;
+                default:
+                    throw new NotImplementedException("Unexpected Case");
             }
             return (modifier == Key.None || Keyboard.IsKeyDown(modifier) || (altModifier != Key.None && Keyboard.IsKeyDown(altModifier)));
         }

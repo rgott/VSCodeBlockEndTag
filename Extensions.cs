@@ -15,8 +15,8 @@ namespace CodeBlockEndTag
         /// </summary>
         public static Span Join(this Span s1, Span span)
         {
-            int start = Math.Min(s1.Start, span.Start);
-            int end = Math.Max(s1.End, span.End);
+            var start = Math.Min(s1.Start, span.Start);
+            var end = Math.Max(s1.End, span.End);
             return new Span(start, end - start);
         }
 

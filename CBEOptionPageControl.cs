@@ -43,7 +43,7 @@ namespace CodeBlockEndTag
             UpdateSizeLabel();
 
             lviLanguages.Items.Clear();
-            string[] langs = optionsPage.SupportedLangDisplayNames;
+            var langs = optionsPage.SupportedLangDisplayNames;
             for (int i = 0; i<langs.Length; i++)
             {
                 lviLanguages.Items.Add(langs[i]);
@@ -56,13 +56,13 @@ namespace CodeBlockEndTag
 
         private void lblLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            ProcessStartInfo sInfo = new ProcessStartInfo(DonateUrl);
+            var sInfo = new ProcessStartInfo(DonateUrl);
             Process.Start(sInfo);
         }
 
         private void lnkGitHub_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            ProcessStartInfo sInfo = new ProcessStartInfo(GitHubUrl);
+            var sInfo = new ProcessStartInfo(GitHubUrl);
             Process.Start(sInfo);
         }
 

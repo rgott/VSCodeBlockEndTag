@@ -51,37 +51,22 @@ namespace CodeBlockEndTag
         public const string PackageGuidString = "d7c91e0f-240b-4605-9f35-accf63a68623";
 
         public delegate void PackageOptionChangedHandler(object sender);
+        
         /// <summary>
         /// Event fired if any option in the OptionPage is changed
         /// </summary>
         public event PackageOptionChangedHandler PackageOptionChanged;
 
-        /// <summary>
-        /// Gets the singelton instance of the class
-        /// </summary>
-        public static CBETagPackage Instance
-        {
-            get
-            {
-                return _instance;
-            }
-        }
-        private static CBETagPackage _instance;
+        public static CBETagPackage Instance => new CBETagPackage();
 
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CBETagPackage"/> class.
-        /// </summary>
-        public CBETagPackage()
+        private CBETagPackage()
         {
-            _instance = this;
         }
 
         /// <summary>
         /// Gets a list of all possible content types in VisualStudio
         /// </summary>
         public static IList<IContentType> ContentTypes { get; private set; }
-
 
         /// <summary>
         /// Load the list of content types
@@ -99,8 +84,7 @@ namespace CodeBlockEndTag
 
         public static bool IsLanguageSupported(string lang)
         {
-            CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-            return page.IsLanguageSupported(lang);
+            return GetOptions().IsLanguageSupported(lang);
         }
 
         #region Option Values
@@ -109,8 +93,7 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-                return page.CBEDisplayMode;
+                return GetOptions().CBEDisplayMode;
             }
         }
 
@@ -118,8 +101,7 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-                return page.CBEVisibilityMode;
+                return GetOptions().CBEVisibilityMode;
             }
         }
 
@@ -127,8 +109,7 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-                return page.CBETaggerEnabled;
+                return GetOptions().CBETaggerEnabled;
             }
         }
 
@@ -136,8 +117,7 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-                return page.CBEClickMode;
+                return GetOptions().CBEClickMode;
             }
         }
 
@@ -145,9 +125,14 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
-                return page.CBETagScale;
+                return GetOptions().CBETagScale;
             }
+        }
+
+               
+        private static CBEOptionPage GetOptions()
+        {
+            return (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
         }
 
         #endregion
@@ -161,7 +146,7 @@ namespace CodeBlockEndTag
         protected override void Initialize()
         {
             base.Initialize();
-            CBEOptionPage page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
+            var page = (CBEOptionPage)Instance.GetDialogPage(typeof(CBEOptionPage));
             page.OptionChanged += Page_OptionChanged;
         }
 

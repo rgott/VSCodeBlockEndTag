@@ -9,7 +9,6 @@ using Microsoft.VisualStudio.Settings;
 
 namespace CodeBlockEndTag
 {
-
     [Guid("B009CDB7-6900-47DC-8403-285191252811")]
     public class CBEOptionPage : DialogPage
     {
@@ -22,16 +21,16 @@ namespace CodeBlockEndTag
         public CBEOptionPage()
         {
             // default: all languages are enabled
-            SupportedLangActive = _supportedLangs.Select(l => true).ToArray();
+            SupportedLangActive = _supportedLangs.Select(_ => true).ToArray();
         }
 
         #region supported languages
 
         // List of all supported languages 
         // Never remove any! User preferences are stored for each array position
-        private SupportedLang[] _supportedLangs = new SupportedLang[]
+        private readonly SupportedLang[] _supportedLangs = new SupportedLang[]
         {
-            new SupportedLang() { Name = "CSharp",       DisplayName = "CSharp C#" },
+            new SupportedLang { Name = "CSharp",       DisplayName = "CSharp C#" },
             /*
              All of these languages don't come with a decent TextStructureNavigator so they can't be used right now
 
@@ -71,7 +70,7 @@ namespace CodeBlockEndTag
         {
             if (index >= SupportedLangActive.Length)
             {
-                bool[] a = SupportedLangActive;
+                var a = SupportedLangActive;
                 Array.Resize(ref a, index + 1);
                 SupportedLangActive = a;
             }
@@ -83,7 +82,7 @@ namespace CodeBlockEndTag
         /// </summary>
         public bool IsLanguageSupported(string lang)
         {
-            int index = Array.FindIndex(_supportedLangs, sl => sl.Name.Equals(lang));
+            var index = Array.FindIndex(_supportedLangs, x => x.Name.Equals(lang));
             if (index >= 0 && index < SupportedLangActive.Length)
             {
                 return SupportedLangActive[index];
@@ -243,7 +242,7 @@ namespace CodeBlockEndTag
         {
             get
             {
-                CBEOptionPageControl page = new CBEOptionPageControl();
+                var page = new CBEOptionPageControl();
                 page.optionsPage = this;
                 page.Initialize();
                 return page;

@@ -7,10 +7,10 @@ using System.Linq;
 using Microsoft.VisualStudio.Imaging;
 using Microsoft.VisualStudio.Imaging.Interop;
 using System.Collections.Generic;
+using System;
 
 namespace CodeBlockEndTag
 {
-
     internal sealed class IconMonikerSelector
     {
         private const string ModifierPublic = "public";
@@ -42,21 +42,20 @@ namespace CodeBlockEndTag
 
         public static ImageMoniker SelectMoniker(string header)
         {
-            ImageMoniker icon = KnownMonikers.QuestionMark;
+            var icon = KnownMonikers.QuestionMark;
             if (string.IsNullOrWhiteSpace(header)) return icon;
 
             // split words of header
-            string[] words = header.Split(' ');
-            int modifierCount = 0;
+            var words = header.Split(' ');
             if (words.Length == 0) return icon;
 
             // find first visibility modifier
-            string modifier = GetModifier(words, out modifierCount);
-            int keywordIndex = modifierCount;
+            var modifier = GetModifier(words, out var modifierCount);
+            var keywordIndex = modifierCount;
             if (words.Length <= keywordIndex) return icon;
 
             // take first keyword
-            string keyword = words[keywordIndex].ToLower();
+            var keyword = words[keywordIndex].ToLower();
             if (keyword.Contains('('))
             {
                 keyword = keyword.Substring(0, keyword.IndexOf('('));
@@ -212,14 +211,14 @@ namespace CodeBlockEndTag
 
         private static string GetModifier(string[] words, out int modifierCount)
         {
-            string modifier = string.Empty;
+            var modifier = string.Empty;
             modifierCount = 0;
-            foreach (string word in words)
+            foreach (var word in words)
             {
                 if (Modifiers.Contains(word))
                 {
                     modifierCount++;
-                    if (string.IsNullOrWhiteSpace(modifier))
+                    if (String.IsNullOrWhiteSpace(modifier))
                         modifier = word;
                     continue;
                 }

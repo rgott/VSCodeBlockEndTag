@@ -44,22 +44,29 @@ namespace CodeBlockEndTag
         /// </summary>
         public ITagger<T> CreateTagger<T>(ITextView textView, ITextBuffer buffer) where T : ITag
         {
-            // only works with IWpfTextView
-            var wpfTextView = textView as IWpfTextView;
-            if (wpfTextView == null)
-                return null;
-
             // provide the tag only on the top-level buffer
             if (textView.TextBuffer != buffer)
+            {
                 return null;
+            }
             
             // Check if content type (language) is supported and active for tagging
-            IContentType type = textView.TextBuffer.ContentType;
+            var type = textView.TextBuffer.ContentType;
             if (!CBETagPackage.IsLanguageSupported(type.TypeName))
+            {
                 return null;
+            }
 
-            // return new instance of CBETagger
-            return new CBETagger(this, wpfTextView) as ITagger<T>;
+            // only works with IWpfTextView
+            if (textView is IWpfTextView wpfTextView)
+            {
+                // return new instance of CBETagger
+                return new CBETagger(this, wpfTextView) as ITagger<T>;
+            }
+            else
+            {
+                return null;
+            }
         }
 
         /// <summary>
